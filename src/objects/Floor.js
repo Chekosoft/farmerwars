@@ -6,7 +6,7 @@ var config = {
 export default class Floor extends Phaser.Sprite {
     constructor(game, x, y, type) {
         super(game, x*config.floorwidth, y*config.floorheight, type);
-        this.type = type;
+        this.groundType = type;
         this.grid_x = x;
         this.grid_y = y;
         this.animals = 0;
@@ -18,5 +18,10 @@ export default class Floor extends Phaser.Sprite {
             x: this.grid_x,
             y: this.grid_y
         };
+    }
+
+    changeType(new_type) {
+        this.loadTexture(new_type);
+        this.groundType = new_type;
     }
 }

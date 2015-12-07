@@ -6,14 +6,53 @@ var config = {
 export default class Player extends Phaser.Sprite {
     constructor(game, x, y, type) {
         super(game, x*config.playerwidth, y*config.playerheight, type);
+        this.playerType = type;
         this.grid_x = x;
         this.grid_y = y;
+        this.canMove = true;
+        this.isTired = false;
+        this.score = 0;
         this.game.stage.addChild(this);
+        this.stamina = 100;
     }
 
+    setMovementDelay(delay) {
+        this.movementDelay = delay;
+    }
 
-    setScore(score) {
-        this.score = score;
+    setRecoveryDelay(delay) {
+        this.recoveryDelay = delay;
+    }
+
+    lowerStamina(factor) {
+        this.stamina -= factor;
+        this.checkStamina();
+    }
+
+    checkStamina() {
+        if(this.stamina <= 0) {
+            this.isTired = true;
+            this.stamina = 0;
+            this.canMove = false;
+            this.game.time.events.add(
+            this.recoveryDelay,
+            function() {
+                this.stamina = 100;
+                this.canMove = true;
+                this.isTired = false;
+            },
+            this);
+        }
+    }
+
+    _stopMoving() {
+        if(this.canMove && !this.isTired){
+            this.canMove = false;
+            this.game.time.events.add(this.movementDelay, function() {
+                if(!this.isTired)
+                    this.canMove = true;
+            }, this);
+        }
     }
 
     getPosition() {
@@ -34,28 +73,40 @@ export default class Player extends Phaser.Sprite {
         this.position.y = config.playerheight* this.grid_y;
     }
 
-
     goLeft() {
-        this.grid_x = (this.grid_x == 0) ? 0 : this.grid_x - 1;
-        this._repositionSprite();
+        if(this.canMove && !this.isTired){
+            this.grid_x = (this.grid_x == 0) ? 0 : this.grid_x - 1;
+            this._repositionSprite();
+            this._stopMoving();
+            this.checkStamina();
+        }
     }
 
     goRight() {
-        this.grid_x = (this.grid_x == 19) ? 19 : this.grid_x + 1;
-        this._repositionSprite();
+        if(this.canMove && !this.isTired){
+            this.grid_x = (this.grid_x == 19) ? 19 : this.grid_x + 1;
+            this._repositionSprite();
+            this._stopMoving();
+            this.checkStamina();
+        }
     }
 
     goUp() {
-        this.grid_y = (this.grid_y == 0) ? 0 : this.grid_y - 1;
-        this._repositionSprite();
+        if(this.canMove && !this.isTired){
+            this.grid_y = (this.grid_y == 0) ? 0 : this.grid_y - 1;
+            this._repositionSprite();
+            this._stopMoving();
+            this.checkStamina();
+        }
     }
 
-    goDown() {
-        this.grid_y = (this.grid_y == 14) ? 14 : this.grid_y + 1;
-        this._repositionSprite();
+    goDown(){
+        if(this.canMove && !this.isTired){
+            this.grid_y = (this.grid_y == 14) ? 14 : this.grid_y + 1;
+            this._repositionSprite();
+            this._stopMoving();
+            this.checkStamina();
+        }
     }
 
-    setFarmerType(type) {
-        this.type = type;
-    }
 }
