@@ -12,7 +12,7 @@ export default class StatusText extends Phaser.Text {
     }
 
     updateStatus(player) {
-        var playerStatus = `Player Type: ${player.type}, Is resting: ${(player.isTired) ? "Yes" : "No"}
+        var playerStatus = `Player Type: ${player.playerType}, Is resting: ${(player.isTired) ? "Yes" : "No"}
 Energy: ${player.stamina}, Score: ${player.score}, Can move? ${player.canMove}`;
 
 this.setText(playerStatus);
