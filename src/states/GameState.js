@@ -255,13 +255,13 @@ class GameState extends Phaser.State {
 	}
 
 	preload() {
-		this.game.load.image('water', '/sprites/water.png');
-		this.game.load.image('dead', '/sprites/dead.png');
-		this.game.load.image('grass', '/sprites/grass.png');
-		this.game.load.image('soil', '/sprites/soil.png');
-		this.game.load.image('grains', '/sprites/grains.png');
-		this.game.load.image('cow_farmer', '/sprites/cow_farmer.png');
-		this.game.load.image('chicken_farmer', '/sprites/chicken_farmer.png');
+		this.game.load.image('water', 'sprites/water.png');
+		this.game.load.image('dead', 'sprites/dead.png');
+		this.game.load.image('grass', 'sprites/grass.png');
+		this.game.load.image('soil', 'sprites/soil.png');
+		this.game.load.image('grains', 'sprites/grains.png');
+		this.game.load.image('cow_farmer', 'sprites/cow_farmer.png');
+		this.game.load.image('chicken_farmer', 'sprites/chicken_farmer.png');
 	}
 
 }
