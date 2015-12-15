@@ -23,7 +23,19 @@ class GameState extends Phaser.State {
 		//Terrain
 		this.ground = this.game.add.group();
 		this.buildMap();
+
+		//Timer
+		this.playTime = this.game.time.create(true);
+		this.playTime.add()
+
+		//Audio assets (to not overcrowd the environment)
+		this.cow_sound = this.game.add.audio('cow_sp');
+		this.chicken_sound = this.game.add.audio('chicken_sp');
+		this.shovel_1 = this.game.add.audio('shovel_1');
+		this.shovel_2 = this.game.add.audio('shovel_2');
+
 		//User interaction
+
 		this.keyboard1 = {
 			up: this.game.input.keyboard.addKey(Phaser.Keyboard.W),
 			down: this.game.input.keyboard.addKey(Phaser.Keyboard.S),
@@ -75,40 +87,45 @@ class GameState extends Phaser.State {
 		}
 		var playerNewPosition = player.getPosition();
 		var tileOn = this._getFloorAt(playerNewPosition.x, playerNewPosition.y);
-		if(player.playerType == 'chicken_farmer') {
-			if(tileOn.groundType == 'dead') {
+
+		if(tileOn.groundType == 'water' || tileOn.groundType == 'pavement') {
+			return;
+		} else {
+			tileOn.changeOwner(player);
+			if(player.playerType == 'chicken_farmer') {
+				if(tileOn.groundType == 'dead') {
+					player.lowerStamina(10);
+					player.score += 15;
+				} else if(tileOn.groundType == 'soil') {
+					player.lowerStamina(5);
+					player.score += 10;
+				} else if(tileOn.groundType == 'grass') {
+					player.lowerStamina(20);
+					player.score += 20;
+				}
 				tileOn.changeType('grains');
-				player.lowerStamina(10);
-				player.score += 15;
-			} else if(tileOn.groundType == 'soil') {
-				tileOn.changeType('grains');
-				player.lowerStamina(5);
-				player.score += 10;
-			} else if(tileOn.groundType == 'grass') {
-				tileOn.changeType('grains');
-				player.lowerStamina(20);
-				player.score += 20;
+				tileOn.startGrowTimer();
 			}
-		} else if(player.playerType == 'cow_farmer') {
-			if(tileOn.groundType == 'dead') {
+			else if(player.playerType == 'cow_farmer') {
+				if(tileOn.groundType == 'dead') {
+					player.lowerStamina(10);
+					player.score += 15;
+				} else if(tileOn.groundType == 'soil') {
+					player.lowerStamina(5);
+					player.score += 10;
+				} else if(tileOn.groundType == 'grains') {
+					player.lowerStamina(15);
+					player.score += 20;
+				}
+				tileOn.startGrowTimer();
 				tileOn.changeType('grass');
-				player.lowerStamina(10);
-				player.score += 15;
-			} else if(tileOn.groundType == 'soil') {
-				tileOn.changeType('grass');
-				player.lowerStamina(5);
-				player.score += 10;
-			} else if(tileOn.groundType == 'grains') {
-				tileOn.changeType('grass');
-				player.lowerStamina(15);
-				player.score += 20;
 			}
 		}
 	}
 
 	_getFloorAt(x, y) {
 		let tileAt = x + 20*y;
-		return (this.ground.children.length < tileAt || tileAt < 0) ?
+		return (tileAt < 0 || tileAt >= 300) ?
 				null : this.ground.getChildAt(tileAt);
 	}
 
@@ -154,114 +171,140 @@ class GameState extends Phaser.State {
 			}
 		}
 
-		var waterMass = [];
+		var roadPoints = [3,7,11].filter(function(el) {
+			return (this.game.rnd.between(0,4) > 2);
+		}, this);
 
-		for(let j = 1; j < 3; j++){
-			for(let i = 0; i < 3; i++) {
-				let put_water = this.game.rnd.between(0, 1);
-				let size = this.game.rnd.between(1,3);
-				if(put_water) {
+		if(roadPoints.length == 0) {
+			roadPoints = [7];
+		}
 
-					waterMass.push({
-						x: 5*j, y: 5*i, size: size
+		roadPoints.forEach(function(point) {
+			for(let i = 0; i < 20; i++) {
+				this._getFloorAt(i, point).changeType('pavement');
+			}
+		}, this);
+
+		var waterSeeds = [4,9,10,15].filter(function(el) {
+			return (this.game.rnd.between(0,4) > 2);
+		}, this);
+
+		var waterPoints = [];
+
+		waterSeeds.forEach(function(point) {
+			let down = this.game.rnd.pick([0,1]);
+			let currentX = point;
+			let y = 0;
+			let sub = false;
+			if(down){
+				y = 14;
+				sub = true;
+			}
+
+			while(!sub && y < 15 || sub && y > 0) {
+				let advance = this.game.rnd.pick([-1, 0, 1]);
+				switch(advance) {
+					case -1:
+						currentX--;
+						break;
+					case 1:
+						currentX++;
+						break;
+					default:
+						break;
+				}
+
+				let tile = this._getFloorAt(currentX, y);
+				if(currentX == 0 || currentX == 14
+					|| tile == null || tile.groundType == 'water') {
+					break;
+				}
+				else if(tile.groundType == 'dead') {
+					tile.changeType('water');
+					waterPoints.push({
+						x: currentX,
+						y: y
 					});
-
-					for(let k = 0; k < size; k++) {
-						for(let l = 0; l < size; l++) {
-							let tile = this._getFloorAt(5*j+l, 5*i+k);
-							if(tile.groundType == 'dead')
-								tile.changeType('water');
-						}
+					let filler = null;
+					switch(advance) {
+						case -1:
+							filler = this._getFloorAt(currentX + 1, y);
+							if(filler && filler.grid_x > 0 && filler.groundType == 'dead') {
+								filler.changeType('water');
+							} else {
+								filler = null;
+							}
+						break;
+						case 1:
+							filler = this._getFloorAt(currentX - 1, y);
+							if(filler && filler.grid_x < 18 && filler.groundType == 'dead') {
+								filler.changeType('water');
+							} else {
+								filler = null;
+							}
+						break;
+					}
+					if(filler != null) {
+						waterPoints.push({
+							x: filler.grid_x,
+							y: filler.grid_y
+						});
 					}
 				}
+				y = (sub) ? y-1: y+1;
 			}
-		}
+		}, this);
 
-		for(let i = 0, wl = waterMass.length; i < wl; i++) {
-			let water = waterMass[i];
-			let soilSize = this.game.rnd.between(1, water.size);
-			//left and right of water mass
-			for(let j = 0; j < water.size; j++) {
-				for(let k = 1; k <= soilSize; k++) {
-					let tile = this._getFloorAt(water.x - k, water.y + j);
-					if(tile === null || tile.groundType !== 'dead') {
-						continue;
-					}
-					tile.changeType('soil');
-				}
-
-				for(let k = 0; k < soilSize; k++) {
-					let tile = this._getFloorAt(water.x + water.size + k, water.y + j);
-					if(tile === null || tile.groundType !== 'dead') {
-						continue;
-					}
-					tile.changeType('soil');
-				}
-			}
-			//top and bottom of water mass
-
-			for(let j = 0; j < water.size; j++) {
-				for(let k = 1; k <= soilSize; k++) {
-					let tile = this._getFloorAt(water.x + j, water.y - k);
-					if(tile === null || tile.groundType !== 'dead') {
-						continue;
-					}
-					tile.changeType('soil');
-				}
-
-				for(let k = 0; k < soilSize; k++) {
-					let tile = this._getFloorAt(water.x + j, water.y + water.size + k);
-					if(tile === null || tile.groundType !== 'dead') {
-						continue;
-					}
-					tile.changeType('soil');
-				}
+		waterPoints.forEach(function(point) {
+			let tile = this._getFloorAt(point.x - 1, point.y);
+			if(tile && tile.groundType == 'dead') {
+				tile.changeType('soil');
 			}
 
-			for(let j = 0; j <= soilSize; j++) {
-				for(let k = 0; k <= soilSize; k++) {
-					let tile = this._getFloorAt(water.x - j, water.y - k);
-					if(tile === null || tile.groundType !== 'dead') {
-						continue;
-					}
-					tile.changeType('soil');
-				}
-				for(let k = 0; k < soilSize; k++) {
-					let tile = this._getFloorAt(water.x - j, water.y + water.size + k);
-					if(tile === null || tile.groundType !== 'dead') {
-						continue;
-					}
-					tile.changeType('soil');
-				}
-			}
+			tile = this._getFloorAt(point.x + 1, point.y);
+			if(tile && tile.groundType == 'dead')
+				tile.changeType('soil');
 
-			for(let j = 0; j < soilSize; j++) {
-				for(let k = 0; k <= soilSize; k++) {
-					let tile = this._getFloorAt(water.x + water.size + j, water.y - k);
-					if(tile === null || tile.groundType !== 'dead') {
-						continue;
-					}
-					tile.changeType('soil');
-				}
-				for(let k = 0; k < soilSize; k++) {
-					let tile = this._getFloorAt(water.x + water.size + j, water.y + water.size + k);
-					if(tile === null || tile.groundType !== 'dead') {
-						continue;
-					}
-					tile.changeType('soil');
-				}
-			}
-		}
+			tile = this._getFloorAt(point.x, point.y - 1);
+			if(tile && tile.groundType == 'dead')
+				tile.changeType('soil');
+
+			tile = this._getFloorAt(point.x, point.y + 1);
+			if(tile && tile.groundType == 'dead')
+				tile.changeType('soil');
+		}, this);
 	}
 
 	preload() {
-		this.game.load.image('water', 'sprites/water.png');
-		this.game.load.image('dead', 'sprites/dead.png');
-		this.game.load.image('grass', 'sprites/grass.png');
-		this.game.load.image('soil', 'sprites/soil.png');
-		this.game.load.image('grains', 'sprites/grains.png');
-		this.game.load.image('cow_farmer', 'sprites/cow_farmer.png');
-		this.game.load.image('chicken_farmer', 'sprites/chicken_farmer.png');
+		//sprites
+
+		//ground types
+		this.game.load.image('water', 'sprites/new/water.png');
+		this.game.load.image('dead', 'sprites/new/dead.png');
+
+		this.game.load.image('pavement', 'sprites/new/pavement.png');
+
+		//soil
+		this.game.load.image('soil', 'sprites/new/soil.png');
+		this.game.load.image('grains', 'sprites/new/grains.png');
+		this.game.load.image('chicken_1', 'sprites/new/chicken_1.png');
+		this.game.load.image('chicken_2', 'sprites/new/chicken_2.png');
+		this.game.load.image('chicken_3', 'sprites/new/chicken_3.png');
+
+		this.game.load.image('grass', 'sprites/new/grass.png');
+		this.game.load.image('cow_1', 'sprites/new/cow_1.png');
+		this.game.load.image('cow_2', 'sprites/new/cow_2.png');
+		this.game.load.image('cow_3', 'sprites/new/cow_3.png');
+
+		//players
+		this.game.load.image('cow_farmer', 'sprites/new/cow_farmer.png');
+		this.game.load.image('chicken_farmer', 'sprites/new/chicken_farmer.png');
+
+		//sound
+		this.game.load.audio('cow_sp', 'sounds/cow_spawn.mp3');
+		this.game.load.audio('chicken_sp', 'sounds/chicken_spawn.mp3');
+		this.game.load.audio('shovel_1', 'sounds/shovel_1.mp3');
+		this.game.load.audio('shovel_2', 'sounds/shovel_2.mp3');
 	}
 
 }
