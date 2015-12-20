@@ -12,8 +12,10 @@ export default class Player extends Phaser.Sprite {
         this.canMove = true;
         this.isTired = false;
         this.score = 0;
+        this.ownedTerrain = 0;
         this.game.stage.addChild(this);
-        this.stamina = 100;
+        this.max_stamina = 100;
+        this.stamina = this.max_stamina;
     }
 
     setMovementDelay(delay) {
@@ -37,7 +39,7 @@ export default class Player extends Phaser.Sprite {
             this.game.time.events.add(
             this.recoveryDelay,
             function() {
-                this.stamina = 100;
+                this.stamina = this.max_stamina;
                 this.canMove = true;
                 this.isTired = false;
             },

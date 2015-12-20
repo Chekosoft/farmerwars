@@ -2,6 +2,7 @@ import _ from 'lodash';
 import Floor from '../objects/Floor';
 import Player from '../objects/Player';
 import StatusText from '../objects/StatusText';
+import TimeText from '../objects/TimeText';
 
 class GameState extends Phaser.State {
 
@@ -17,8 +18,9 @@ class GameState extends Phaser.State {
 		this.player2.setMovementDelay(500);
 		this.player2.setRecoveryDelay(500);
 
-		this.player1Status = new StatusText(this.game, 50, 600);
-		this.player2Status = new StatusText(this.game, 500, 600);
+		this.player1Status = new StatusText(this.game, 25, 600);
+		this.player2Status = new StatusText(this.game, 525, 600);
+		this.timerStatus = new TimeText(this.game, 350, 600);
 
 		//Terrain
 		this.ground = this.game.add.group();
@@ -26,7 +28,8 @@ class GameState extends Phaser.State {
 
 		//Timer
 		this.playTime = this.game.time.create(true);
-		this.playTime.add()
+		this.playTimeEvent = this.playTime.add(Phaser.Timer.SECOND * 5,
+			this.endGame, this);
 
 		//Audio assets (to not overcrowd the environment)
 		this.cow_sound = this.game.add.audio('cow_sp');
@@ -64,6 +67,7 @@ class GameState extends Phaser.State {
 		this.esc = this.game.input.keyboard.addKey(Phaser.Keyboard.ESC);
 		this.esc.onUp.add(function() { self.game.state.restart(); });
 
+		this.playTime.start();
 	}
 
 	_movePlayer(key, player, place) {
@@ -102,6 +106,9 @@ class GameState extends Phaser.State {
 				} else if(tileOn.groundType == 'grass') {
 					player.lowerStamina(20);
 					player.score += 20;
+				} else {
+					player.lowerStamina(-15);
+					player.score += 15*tileOn.animals;
 				}
 				tileOn.changeType('grains');
 				tileOn.startGrowTimer();
@@ -126,7 +133,7 @@ class GameState extends Phaser.State {
 	_getFloorAt(x, y) {
 		let tileAt = x + 20*y;
 		return (tileAt < 0 || tileAt >= 300) ?
-				null : this.ground.getChildAt(tileAt);
+				null : this.ground.children[tileAt];
 	}
 
 	shutdown() {
@@ -134,12 +141,16 @@ class GameState extends Phaser.State {
 		this.player2.destroy(true);
 		this.player1Status.destroy(true);
 		this.player2Status.destroy(true);
+		this.timerStatus.destroy(true);
+		this.playTime.stop(true);
+		this.playTime.destroy();
 	}
 
 	update() {
 		//Update statustexts
 		this.player1Status.updateStatus(this.player1);
 		this.player2Status.updateStatus(this.player2);
+		this.timerStatus.updateStatus(this.playTime, this.playTimeEvent);
 
 		//Get floor
 		var player1pos = this.player1.getPosition(),
@@ -206,8 +217,12 @@ class GameState extends Phaser.State {
 				switch(advance) {
 					case -1:
 						currentX--;
+						if(point - currentX > 2)
+							currentX = point - 2;
 						break;
 					case 1:
+						if(currentX - point > 2)
+							currentX = point + 2;
 						currentX++;
 						break;
 					default:
@@ -275,6 +290,15 @@ class GameState extends Phaser.State {
 		}, this);
 	}
 
+	endGame() {
+		this.playTime.stop();
+		this.game.paused = true;
+		this.esc.onUp.add(function() {
+			this.game.paused = false;
+			this.game.state.restart();
+		}, this);
+	}
+
 	preload() {
 		//sprites
 
@@ -297,7 +321,22 @@ class GameState extends Phaser.State {
 		this.game.load.image('cow_3', 'sprites/new/cow_3.png');
 
 		//players
+		//cow farmer
+		this.game.load.image('cow_farmer_moving_down', 'def_sprites/game/cow_farmer_moving_down.png');
+		this.game.load.image('cow_farmer_moving_left', 'def_sprites/game/cow_farmer_moving_left.png');
+		this.game.load.image('cow_farmer_moving_right', 'def_sprites/game/cow_farmer_moving_right.png');
+		this.game.load.image('cow_farmer_moving_up', 'def_sprites/game/cow_farmer_moving_up.png');
+		this.game.load.image('cow_farmer_sitting_down', 'def_sprites/game/cow_farmer_sitting_down.png');
+		this.game.load.image('cow_farmer_sitting_left', 'def_sprites/game/cow_farmer_sitting_left.png');
+		this.game.load.image('cow_farmer_sitting_right', 'def_sprites/game/cow_farmer_sitting_right.png');
+		this.game.load.image('cow_farmer_sitting_up', 'def_sprites/game/cow_farmer_sitting_up.png');
+		this.game.load.image('cow_farmer_standing_down', 'def_sprites/game/cow_farmer_moving_down.png');
+		this.game.load.image('cow_farmer_standing_left', 'def_sprites/game/cow_farmer_moving_left.png');
+		this.game.load.image('cow_farmer_standing_right', 'def_sprites/game/cow_farmer_moving_right.png');
+		this.game.load.image('cow_farmer_standing_up', 'def_sprites/game/cow_farmer_moving_up.png');
+
 		this.game.load.image('cow_farmer', 'sprites/new/cow_farmer.png');
+		//chicken farmer
 		this.game.load.image('chicken_farmer', 'sprites/new/chicken_farmer.png');
 
 		//sound

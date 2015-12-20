@@ -15,6 +15,7 @@ export default class Floor extends Phaser.Sprite {
         this.animals = 0;
         this.growTimer = null;
         this.owner = null;
+        this.soilRadius = 0;
 
         // this.ne = this.game.add.sprite(config.floorwidth*x, config.floorheight*y, 'transparent_small');
         // this.nw = this.game.add.sprite(config.floorwidth*(x+20), config.floorheight*y, 'transparent_small');
@@ -45,7 +46,12 @@ export default class Floor extends Phaser.Sprite {
     }
 
     changeOwner(owner) {
+        if(this.owner !== null) {
+            this.owner.ownedTerrain--;
+        }
         this.owner = owner;
+        if(owner)
+            owner.ownedTerrain++;
     }
 
     startGrowTimer() {
@@ -76,18 +82,15 @@ export default class Floor extends Phaser.Sprite {
 
     _growAnimals() {
         this.animals++;
-        this.owner.score += 20;
         var state = this.game.state.getCurrentState();
         if(this.animals <= 3) {
             if(this.owner.playerType == 'cow_farmer') {
                 this.loadTexture('cow_' + this.animals);
-                this.owner.score += 15;
                 if(!state.cow_sound.isPlaying && this.game.rnd.between(0,2) == 2)
                     state.cow_sound.play();
 
             } else if(this.owner.playerType == 'chicken_farmer') {
                 this.loadTexture('chicken_' + this.animals);
-                this.owner.score += 10;
                 if(!state.chicken_sound.isPlaying  && this.game.rnd.between(0,2) == 2)
                     state.chicken_sound.play();
             }
@@ -95,6 +98,7 @@ export default class Floor extends Phaser.Sprite {
         else {
             this.animals = 0;
             this.changeType('dead');
+            this.changeOwner(null);
             this.stopGrowTimer();
         }
     }
