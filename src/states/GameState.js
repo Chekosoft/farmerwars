@@ -3,39 +3,63 @@ import Floor from '../objects/Floor';
 import Player from '../objects/Player';
 import StatusText from '../objects/StatusText';
 import TimeText from '../objects/TimeText';
+import WinnerText from '../objects/WinnerText';
+import Car from '../objects/Car';
 
 class GameState extends Phaser.State {
 
 	create() {
 		var self = this;
 
+		//Terrain
+		this.ground = this.game.add.group();
+		this.buildMap();
+
 		//Players
-		this.player1 = new Player(this.game, 0, 6, 'chicken_farmer');
-		this.player2 = new Player(this.game, 19, 8, 'cow_farmer');
+		this.player1 = new Player(this.game, 0, 6, 'chicken_farmer', 'right');
+		this.player2 = new Player(this.game, 19, 8, 'cow_farmer', 'left');
+
+		//Hazards
+		this.car = null;
 
 		this.player1.setMovementDelay(300);
 		this.player1.setRecoveryDelay(1000);
 		this.player2.setMovementDelay(500);
 		this.player2.setRecoveryDelay(500);
 
-		this.player1Status = new StatusText(this.game, 25, 600);
-		this.player2Status = new StatusText(this.game, 525, 600);
-		this.timerStatus = new TimeText(this.game, 350, 600);
+		this.player1Status = new StatusText(this.game, 25, 600, "left");
+		this.player2Status = new StatusText(this.game, 650, 600, "right");
+		this.timerStatus = new TimeText(this.game, 340, 600);
 
-		//Terrain
-		this.ground = this.game.add.group();
-		this.buildMap();
-
-		//Timer
+		//Timers
 		this.playTime = this.game.time.create(true);
-		this.playTimeEvent = this.playTime.add(Phaser.Timer.SECOND * 5,
+		this.playTimeEvent = this.playTime.add(Phaser.Timer.SECOND * 30 + Phaser.Timer.MINUTE * 2,
 			this.endGame, this);
+
+		//cartimer
+		this.carTimer = this.game.time.create(true);
+		this.carTimer.loop(Phaser.Timer.SECOND * 25, function() {
+			this.car = new Car(this.game,
+				this.game.rnd.pick(this.roadPoints),
+				this.game.rnd.pick(['left', 'right']));
+			console.log(this.car.position.x, this.car.position.y);
+			let tween = this.game.add.tween(this.car).
+				to({ x : this.car.stop_at }, Phaser.Timer.SECOND * 3,
+				 Phaser.Easing.Linear.None);
+			tween.onComplete.add(function() {
+				this.car.destroy(true);
+				this.car = null;
+			}, this);
+			this.car_sound.play();
+			tween.start();
+		}, this);
 
 		//Audio assets (to not overcrowd the environment)
 		this.cow_sound = this.game.add.audio('cow_sp');
 		this.chicken_sound = this.game.add.audio('chicken_sp');
 		this.shovel_1 = this.game.add.audio('shovel_1');
 		this.shovel_2 = this.game.add.audio('shovel_2');
+		this.car_sound = this.game.add.audio('car');
 
 		//User interaction
 
@@ -67,14 +91,13 @@ class GameState extends Phaser.State {
 		this.esc = this.game.input.keyboard.addKey(Phaser.Keyboard.ESC);
 		this.esc.onUp.add(function() { self.game.state.restart(); });
 
+		//Start timers
 		this.playTime.start();
+		this.carTimer.start();
 	}
 
 	_movePlayer(key, player, place) {
 		if(!player.canMove) return;
-
-		var staminaReduction = 5;
-		player.lowerStamina(staminaReduction);
 		switch(place) {
 			case 'up':
 				player.goUp();
@@ -98,16 +121,18 @@ class GameState extends Phaser.State {
 			tileOn.changeOwner(player);
 			if(player.playerType == 'chicken_farmer') {
 				if(tileOn.groundType == 'dead') {
-					player.lowerStamina(10);
+					player.lowerStamina(15);
 					player.score += 15;
 				} else if(tileOn.groundType == 'soil') {
-					player.lowerStamina(5);
+					player.lowerStamina(10);
 					player.score += 10;
 				} else if(tileOn.groundType == 'grass') {
-					player.lowerStamina(20);
-					player.score += 20;
+					player.lowerStamina(35);
+					player.score += 50;
 				} else {
-					player.lowerStamina(-15);
+					if(player.stamina <= 100) {
+						player.lowerStamina(-10 * tileOn.animals);
+					}
 					player.score += 15*tileOn.animals;
 				}
 				tileOn.changeType('grains');
@@ -115,17 +140,23 @@ class GameState extends Phaser.State {
 			}
 			else if(player.playerType == 'cow_farmer') {
 				if(tileOn.groundType == 'dead') {
-					player.lowerStamina(10);
+					player.lowerStamina(15);
 					player.score += 15;
 				} else if(tileOn.groundType == 'soil') {
-					player.lowerStamina(5);
+					player.lowerStamina(10);
 					player.score += 10;
 				} else if(tileOn.groundType == 'grains') {
-					player.lowerStamina(15);
-					player.score += 20;
+					player.lowerStamina(35);
+					player.score += 50;
+				} else {
+					if(player.stamina <= 100) {
+						player.lowerStamina(-10 * tileOn.animals);
+					}
+					player.score += 15*tileOn.animals;
 				}
-				tileOn.startGrowTimer();
 				tileOn.changeType('grass');
+				tileOn.startGrowTimer();
+
 			}
 		}
 	}
@@ -142,8 +173,13 @@ class GameState extends Phaser.State {
 		this.player1Status.destroy(true);
 		this.player2Status.destroy(true);
 		this.timerStatus.destroy(true);
+		this.carTimer.stop();
+		this.carTimer.destroy(true);
 		this.playTime.stop(true);
 		this.playTime.destroy();
+		if(this.winnerText) {
+			this.winnerText.destroy(true);
+		}
 	}
 
 	update() {
@@ -162,15 +198,32 @@ class GameState extends Phaser.State {
 		if(_.isEqual(player1pos, player2pos)) {
 			this.player1.setPosition(0, 6);
 			this.player2.setPosition(19, 8);
+			this.player1.stamina = 85;
+			this.player2.stamina = 85;
 		}
 
 		//What if players collide with environment
 		if(p1Ground.groundType == 'water') {
 			this.player1.setPosition(0, 6);
+			this.player1.stamina = 30;
 		}
 
 		if(p2Ground.groundType == 'water') {
 			this.player2.setPosition(19, 8);
+			this.player2.stamina = 30;
+		}
+
+		//What if players collide with the car
+		if(this.car !== null) {
+			//player 1
+			if(this.car.overlap(this.player1)) {
+				this.player1.setPosition(0, 6);
+				this.player1.stamina = 50;
+			}
+			if(this.car.overlap(this.player2)) {
+				this.player2.setPosition(19, 8);
+				this.player2.stamina = 50;
+			}
 		}
 	}
 
@@ -189,6 +242,8 @@ class GameState extends Phaser.State {
 		if(roadPoints.length == 0) {
 			roadPoints = [7];
 		}
+
+		this.roadPoints = roadPoints;
 
 		roadPoints.forEach(function(point) {
 			for(let i = 0; i < 20; i++) {
@@ -293,10 +348,23 @@ class GameState extends Phaser.State {
 	endGame() {
 		this.playTime.stop();
 		this.game.paused = true;
+		var winner = null;
+		console.log(this.player1.ownedTerrain, this.player2.ownedTerrain);
+		if(this.player1.ownedTerrain > this.player2.ownedTerrain) {
+			winner = this.player1;
+		} else if(this.player2.ownedTerrain > this.player1.ownedTerrain) {
+			winner = this.player2;
+		}
+		this.winnerText = new WinnerText(this.game, 400, 330);
+		this.winnerText.anchor.set(0.5);
+		this.winnerText.setWinner(winner);
+
 		this.esc.onUp.add(function() {
 			this.game.paused = false;
 			this.game.state.restart();
 		}, this);
+
+
 	}
 
 	preload() {
@@ -322,28 +390,29 @@ class GameState extends Phaser.State {
 
 		//players
 		//cow farmer
-		this.game.load.image('cow_farmer_moving_down', 'def_sprites/game/cow_farmer_moving_down.png');
-		this.game.load.image('cow_farmer_moving_left', 'def_sprites/game/cow_farmer_moving_left.png');
-		this.game.load.image('cow_farmer_moving_right', 'def_sprites/game/cow_farmer_moving_right.png');
-		this.game.load.image('cow_farmer_moving_up', 'def_sprites/game/cow_farmer_moving_up.png');
-		this.game.load.image('cow_farmer_sitting_down', 'def_sprites/game/cow_farmer_sitting_down.png');
-		this.game.load.image('cow_farmer_sitting_left', 'def_sprites/game/cow_farmer_sitting_left.png');
-		this.game.load.image('cow_farmer_sitting_right', 'def_sprites/game/cow_farmer_sitting_right.png');
-		this.game.load.image('cow_farmer_sitting_up', 'def_sprites/game/cow_farmer_sitting_up.png');
-		this.game.load.image('cow_farmer_standing_down', 'def_sprites/game/cow_farmer_moving_down.png');
-		this.game.load.image('cow_farmer_standing_left', 'def_sprites/game/cow_farmer_moving_left.png');
-		this.game.load.image('cow_farmer_standing_right', 'def_sprites/game/cow_farmer_moving_right.png');
-		this.game.load.image('cow_farmer_standing_up', 'def_sprites/game/cow_farmer_moving_up.png');
+		this.game.load.image('cow_farmer_sitting', 'def_sprites/game/cow_farmer_sitting_down.png');
+		this.game.load.image('cow_farmer_down', 'def_sprites/game/cow_farmer_standing_down.png');
+		this.game.load.image('cow_farmer_left', 'def_sprites/game/cow_farmer_standing_left.png');
+		this.game.load.image('cow_farmer_right', 'def_sprites/game/cow_farmer_standing_right.png');
+		this.game.load.image('cow_farmer_up', 'def_sprites/game/cow_farmer_standing_up.png');
 
-		this.game.load.image('cow_farmer', 'sprites/new/cow_farmer.png');
 		//chicken farmer
-		this.game.load.image('chicken_farmer', 'sprites/new/chicken_farmer.png');
+		this.game.load.image('chicken_farmer_sitting', 'def_sprites/game/chicken_farmer_sitting_down.png');
+		this.game.load.image('chicken_farmer_down', 'def_sprites/game/chicken_farmer_standing_down.png');
+		this.game.load.image('chicken_farmer_left', 'def_sprites/game/chicken_farmer_standing_left.png');
+		this.game.load.image('chicken_farmer_right', 'def_sprites/game/chicken_farmer_standing_right.png');
+		this.game.load.image('chicken_farmer_up', 'def_sprites/game/chicken_farmer_standing_up.png');
+
+		//car
+		this.game.load.image('car_left', 'def_sprites/game/car_left.png');
+		this.game.load.image('car_right', 'def_sprites/game/car_right.png');
 
 		//sound
 		this.game.load.audio('cow_sp', 'sounds/cow_spawn.mp3');
 		this.game.load.audio('chicken_sp', 'sounds/chicken_spawn.mp3');
 		this.game.load.audio('shovel_1', 'sounds/shovel_1.mp3');
 		this.game.load.audio('shovel_2', 'sounds/shovel_2.mp3');
+		this.game.load.audio('car', 'sounds/car.mp3');
 	}
 
 }

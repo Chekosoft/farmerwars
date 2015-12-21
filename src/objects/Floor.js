@@ -50,8 +50,9 @@ export default class Floor extends Phaser.Sprite {
             this.owner.ownedTerrain--;
         }
         this.owner = owner;
-        if(owner)
+        if(owner !== null){
             owner.ownedTerrain++;
+        }
     }
 
     startGrowTimer() {

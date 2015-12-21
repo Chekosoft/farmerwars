@@ -1,13 +1,12 @@
 export default class StatusText extends Phaser.Text {
 
-    constructor(game, x, y, player) {
+    constructor(game, x, y, align) {
         super(game, x, y, "",
         {
             font: "14px Droid Sans",
-            align: "left",
+            align: align || "left",
             fill : "#ffffff"
         });
-        this.player = player;
         this.game.stage.addChild(this);
     }
 
@@ -21,8 +20,8 @@ export default class StatusText extends Phaser.Text {
                 playerType = 'Chicken Farmer';
                 break;
         }
-        var playerStatus = `Player Type: ${playerType}, Is resting: ${(player.isTired) ? "Yes" : "No"}
-Energy: ${player.stamina} / ${player.max_stamina}, Score: ${player.score}, Can move? ${(player.canMove) ? "Yes" : "No"}`;
+        var playerStatus = `${playerType}
+Energy: ${player.stamina} Score: ${player.score}`;
 
 this.setText(playerStatus);
     }
