@@ -70,7 +70,7 @@ class GameState extends Phaser.State {
 		this.cow_farmer.setRecoveryDelay(500);
 
 		this.player1Status = new StatusText(this.game, 25, 600, "left");
-		this.player2Status = new StatusText(this.game, 650, 600, "right");
+		this.player2Status = new StatusText(this.game, 630, 600, "right");
 		this.timerStatus = new TimeText(this.game, 340, 600);
 
 		//Terrain groups
@@ -87,7 +87,7 @@ class GameState extends Phaser.State {
 
 		//Timers
 		this.playTime = this.game.time.create(true);
-		this.playTimeEvent = this.playTime.add(Phaser.Timer.SECOND * 30 + Phaser.Timer.MINUTE * 2,
+		this.playTimeEvent = this.playTime.add(Phaser.Timer.MINUTE * 2,
 			this.endGame, this);
 		//this.playTimeEvent = this.playTime.add(Phaser.Timer.SECOND * 5,
 		//	this.endGame, this);
@@ -102,8 +102,10 @@ class GameState extends Phaser.State {
 				to({ x : this.car.stop_at }, Phaser.Timer.SECOND * 3,
 				 Phaser.Easing.Linear.None);
 			tween.onComplete.add(function() {
-				this.car.destroy(true);
-				this.car = null;
+				if(this.car){
+					this.car.destroy(true);
+					this.car = null;
+				}
 			}, this);
 			this.car_sound.play();
 			tween.start();
@@ -163,7 +165,7 @@ class GameState extends Phaser.State {
 
 		this.esc = this.game.input.keyboard.addKey(Phaser.Keyboard.ESC);
 		this.esc.onUp.add(function() {
-			if(this.pause_menu == null || this.pause_menu.visible == false || !this.gameEnded) {
+			if((this.pause_menu == null || this.pause_menu.visible == false) && !this.gameEnded) {
 				this.pause_menu = new PauseMenu(this.game, this.player1, this.player2);
 				this.game.paused = true;
 				this.music.pause();
@@ -271,6 +273,8 @@ class GameState extends Phaser.State {
 			this.fox.destroy();
 		if(this.activist)
 			this.activist.destroy();
+		if(this.car)
+			this.car.destroy();
 	}
 
 	update() {
@@ -704,15 +708,18 @@ class GameState extends Phaser.State {
 		this.player2.stamina = 0;
 		this.player1.canMove = false;
 		this.player2.canMove = false;
-		this.game.add.image(0, 0, 'timesup');
+		let endImage = this.game.add.image(0, 0, 'timesup');
+		endImage.bringToTop();
 
 		this.foxTimer.stop();
 		this.activistTimer.stop();
+		this.carTimer.stop();
 
 		if(this.activist)
 			this.activist.stopAllTimers();
 		if(this.fox)
 			this.fox.stopAllTimers();
+
 
 		this.ground.children.forEach(function(el) {
 			el.stopGrowTimer();
