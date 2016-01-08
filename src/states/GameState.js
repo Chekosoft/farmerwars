@@ -87,10 +87,10 @@ class GameState extends Phaser.State {
 
 		//Timers
 		this.playTime = this.game.time.create(true);
-		//this.playTimeEvent = this.playTime.add(Phaser.Timer.SECOND * 30 + Phaser.Timer.MINUTE * 2,
-		//	this.endGame, this);
-		this.playTimeEvent = this.playTime.add(Phaser.Timer.SECOND * 40,
+		this.playTimeEvent = this.playTime.add(Phaser.Timer.SECOND * 30 + Phaser.Timer.MINUTE * 2,
 			this.endGame, this);
+		//this.playTimeEvent = this.playTime.add(Phaser.Timer.SECOND * 5,
+		//	this.endGame, this);
 
 		//cartimer
 		this.carTimer = this.game.time.create(true);
@@ -704,6 +704,7 @@ class GameState extends Phaser.State {
 		this.player2.stamina = 0;
 		this.player1.canMove = false;
 		this.player2.canMove = false;
+		this.game.add.image(0, 0, 'timesup');
 
 		this.foxTimer.stop();
 		this.activistTimer.stop();
@@ -813,6 +814,9 @@ class GameState extends Phaser.State {
 		this.game.load.spritesheet('restart-button',
 		'def_sprites/game/restart-button.png',
 		164, 75);
+
+		//timesup
+		this.game.load.image('timesup', 'def_sprites/game/timesup.png');
 
 		//sound
 		this.game.load.audio('cow_sp', 'sounds/cow_spawn.mp3');
