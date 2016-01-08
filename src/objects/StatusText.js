@@ -3,7 +3,7 @@ export default class StatusText extends Phaser.Text {
     constructor(game, x, y, align) {
         super(game, x, y, "",
         {
-            font: "14px Droid Sans",
+            font: "14px Wellfleet",
             align: align || "left",
             fill : "#ffffff"
         });

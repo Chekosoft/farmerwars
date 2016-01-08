@@ -7,15 +7,16 @@ export default class Player extends Phaser.Sprite {
     constructor(game, x, y, type, orientation) {
         super(game, x*config.playerwidth, y*config.playerheight, type + '_' + orientation);
         this.playerType = type;
+        this.initial_orientation = orientation;
         this.grid_x = x;
         this.grid_y = y;
         this.canMove = true;
         this.isTired = false;
         this.score = 0;
         this.ownedTerrain = 0;
-        this.game.stage.addChild(this);
         this.max_stamina = 100;
         this.stamina = this.max_stamina;
+        this.game.stage.addChild(this);
     }
 
     setMovementDelay(delay) {

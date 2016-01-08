@@ -3,7 +3,7 @@ export default class TimeText extends Phaser.Text {
     constructor(game, x, y) {
         super(game, x, y, "",
         {
-            font: "16px Droid Sans",
+            font: "16px Wellfleet",
             align: "center",
             fill : "#ffffff"
         });

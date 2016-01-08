@@ -1,10 +1,13 @@
 import _ from 'lodash';
 import Floor from '../objects/Floor';
 import Player from '../objects/Player';
+import PauseMenu from '../objects/PauseMenu';
 import StatusText from '../objects/StatusText';
 import TimeText from '../objects/TimeText';
 import WinnerText from '../objects/WinnerText';
 import Car from '../objects/Car';
+import Fox from '../objects/Fox';
+import Activist from '../objects/Activist';
 
 class GameState extends Phaser.State {
 
@@ -15,34 +18,86 @@ class GameState extends Phaser.State {
 		this.ground = this.game.add.group();
 		this.buildMap();
 
+		this.gameEnded = false;
+
+		//Player initial positions
+		let player1type = this.game.rnd.pick(['cow_farmer', 'chicken_farmer']);
+		let p1_initial_y = this.game.rnd.between(3, 11);
+
+		this.player_data = {
+			p1: {
+				type: player1type,
+				initial_y: p1_initial_y,
+				initial_x: 0
+			},
+			p2: {
+				type: (player1type == 'cow_farmer') ? 'chicken_farmer' : 'cow_farmer',
+				initial_y: 14 - p1_initial_y,
+				initial_x: 19
+			}
+		};
+
+		this.player_data.farmers = {
+			chicken: {
+				y: (this.player_data.p1.type == 'chicken_farmer') ? this.player_data.p1.initial_y : this.player_data.p2.initial_y,
+				x: (this.player_data.p1.type == 'chicken_farmer') ? this.player_data.p1.initial_x : this.player_data.p2.initial_x,
+			},
+			cow: {
+				x: (this.player_data.p1.type == 'cow_farmer') ? this.player_data.p1.initial_x : this.player_data.p2.initial_x,
+				y: (this.player_data.p1.type == 'cow_farmer') ? this.player_data.p1.initial_y : this.player_data.p2.initial_y,
+			}
+		}
+
 		//Players
-		this.player1 = new Player(this.game, 0, 6, 'chicken_farmer', 'right');
-		this.player2 = new Player(this.game, 19, 8, 'cow_farmer', 'left');
+		this.player1 = new Player(this.game,
+			this.player_data.p1.initial_x,
+			this.player_data.p1.initial_y,
+			this.player_data.p1.type,
+			'right');
 
-		//Hazards
-		this.car = null;
+		this.player2 = new Player(this.game,
+			this.player_data.p2.initial_x,
+			this.player_data.p2.initial_y,
+			this.player_data.p2.type,
+			'left');
 
-		this.player1.setMovementDelay(300);
-		this.player1.setRecoveryDelay(1000);
-		this.player2.setMovementDelay(500);
-		this.player2.setRecoveryDelay(500);
+		this.chicken_farmer = (this.player_data.p1.type == 'chicken_farmer') ? this.player1 : this.player2;
+		this.cow_farmer = (this.player_data.p1.type == 'cow_farmer') ? this.player1 : this.player2;
+
+		this.chicken_farmer.setMovementDelay(300);
+		this.chicken_farmer.setRecoveryDelay(1000);
+		this.cow_farmer.setMovementDelay(500);
+		this.cow_farmer.setRecoveryDelay(500);
 
 		this.player1Status = new StatusText(this.game, 25, 600, "left");
 		this.player2Status = new StatusText(this.game, 650, 600, "right");
 		this.timerStatus = new TimeText(this.game, 340, 600);
 
+		//Terrain groups
+		this.chicken_lands = [];
+		this.cow_lands = [];
+
+		//Hazards
+		this.car = null;
+		this.fox = null;
+		this.activist = null;
+
+		//pause menu
+		this.pause_menu = null;
+
 		//Timers
 		this.playTime = this.game.time.create(true);
-		this.playTimeEvent = this.playTime.add(Phaser.Timer.SECOND * 30 + Phaser.Timer.MINUTE * 2,
+		//this.playTimeEvent = this.playTime.add(Phaser.Timer.SECOND * 30 + Phaser.Timer.MINUTE * 2,
+		//	this.endGame, this);
+		this.playTimeEvent = this.playTime.add(Phaser.Timer.SECOND * 40,
 			this.endGame, this);
 
 		//cartimer
 		this.carTimer = this.game.time.create(true);
-		this.carTimer.loop(Phaser.Timer.SECOND * 25, function() {
+		this.carTimer.loop(Phaser.Timer.SECOND * 15, function() {
 			this.car = new Car(this.game,
 				this.game.rnd.pick(this.roadPoints),
 				this.game.rnd.pick(['left', 'right']));
-			console.log(this.car.position.x, this.car.position.y);
 			let tween = this.game.add.tween(this.car).
 				to({ x : this.car.stop_at }, Phaser.Timer.SECOND * 3,
 				 Phaser.Easing.Linear.None);
@@ -54,12 +109,30 @@ class GameState extends Phaser.State {
 			tween.start();
 		}, this);
 
+		this.foxTimer = this.game.time.create(true);
+		this.foxTimer.loop(Phaser.Timer.SECOND * this.game.rnd.between(25,30), function() {
+			if(this.fox == null) {
+				this.fox = new Fox(this.game);
+				this.foxTimer.pause();
+			}
+		}, this);
+
+		this.activistTimer = this.game.time.create(true);
+		this.activistTimer.loop(Phaser.Timer.SECOND * this.game.rnd.between(25,30), function() {
+			if(this.activist == null) {
+				this.activist = new Activist(this.game);
+				this.activistTimer.pause();
+			}
+		}, this);
+
 		//Audio assets (to not overcrowd the environment)
 		this.cow_sound = this.game.add.audio('cow_sp');
 		this.chicken_sound = this.game.add.audio('chicken_sp');
 		this.shovel_1 = this.game.add.audio('shovel_1');
 		this.shovel_2 = this.game.add.audio('shovel_2');
 		this.car_sound = this.game.add.audio('car');
+		this.splash = this.game.add.audio('splash');
+		this.music = this.game.add.audio('music');
 
 		//User interaction
 
@@ -89,15 +162,24 @@ class GameState extends Phaser.State {
 		this.keyboard2.right.onUp.add(this._movePlayer, this, 0, this.player2, 'right');
 
 		this.esc = this.game.input.keyboard.addKey(Phaser.Keyboard.ESC);
-		this.esc.onUp.add(function() { self.game.state.restart(); });
+		this.esc.onUp.add(function() {
+			if(this.pause_menu == null || this.pause_menu.visible == false || !this.gameEnded) {
+				this.pause_menu = new PauseMenu(this.game, this.player1, this.player2);
+				this.game.paused = true;
+				this.music.pause();
+			}
+		}, this);
 
 		//Start timers
 		this.playTime.start();
 		this.carTimer.start();
+		this.foxTimer.start();
+		this.activistTimer.start();
+		this.music.play();
 	}
 
 	_movePlayer(key, player, place) {
-		if(!player.canMove) return;
+		if(!player.canMove || this.gameEnded) return;
 		switch(place) {
 			case 'up':
 				player.goUp();
@@ -136,6 +218,10 @@ class GameState extends Phaser.State {
 					player.score += 15*tileOn.animals;
 				}
 				tileOn.changeType('grains');
+				if(this.chicken_lands.indexOf(tileOn) < 0) {
+					this.chicken_lands.push(tileOn);
+				}
+
 				tileOn.startGrowTimer();
 			}
 			else if(player.playerType == 'cow_farmer') {
@@ -155,8 +241,10 @@ class GameState extends Phaser.State {
 					player.score += 15*tileOn.animals;
 				}
 				tileOn.changeType('grass');
+				if(this.cow_lands.indexOf(tileOn) < 0) {
+					this.cow_lands.push(tileOn);
+				}
 				tileOn.startGrowTimer();
-
 			}
 		}
 	}
@@ -168,6 +256,7 @@ class GameState extends Phaser.State {
 	}
 
 	shutdown() {
+		this.music.stop();
 		this.player1.destroy(true);
 		this.player2.destroy(true);
 		this.player1Status.destroy(true);
@@ -177,9 +266,11 @@ class GameState extends Phaser.State {
 		this.carTimer.destroy(true);
 		this.playTime.stop(true);
 		this.playTime.destroy();
-		if(this.winnerText) {
-			this.winnerText.destroy(true);
-		}
+		this.ground.destroy();
+		if(this.fox)
+			this.fox.destroy();
+		if(this.activist)
+			this.activist.destroy();
 	}
 
 	update() {
@@ -189,42 +280,286 @@ class GameState extends Phaser.State {
 		this.timerStatus.updateStatus(this.playTime, this.playTimeEvent);
 
 		//Get floor
-		var player1pos = this.player1.getPosition(),
-			player2pos = this.player2.getPosition();
-		var p1Ground = this._getFloorAt(player1pos.x, player1pos.y),
-			p2Ground = this._getFloorAt(player2pos.x, player2pos.y);
+		var chickenFarmerPos = this.chicken_farmer.getPosition(),
+			cowFarmerPos = this.cow_farmer.getPosition();
+		var chfGround = this._getFloorAt(chickenFarmerPos.x, chickenFarmerPos.y),
+			cofGround = this._getFloorAt(cowFarmerPos.x, cowFarmerPos.y);
 
 		//What if players collide with each other
-		if(_.isEqual(player1pos, player2pos)) {
-			this.player1.setPosition(0, 6);
-			this.player2.setPosition(19, 8);
+		if(_.isEqual(chickenFarmerPos, cowFarmerPos)) {
+			this.player1.setPosition(this.player_data.p1.initial_x, this.player_data.p1.initial_y);
+			this.player2.setPosition(this.player_data.p2.initial_x, this.player_data.p2.initial_y);
 			this.player1.stamina = 85;
 			this.player2.stamina = 85;
 		}
 
 		//What if players collide with environment
-		if(p1Ground.groundType == 'water') {
-			this.player1.setPosition(0, 6);
-			this.player1.stamina = 30;
+		if(chfGround.groundType == 'water') {
+			this.chicken_farmer.visible = false;
+			chfGround.loadTexture('chicken_farmer_drown');
+
+			this.chicken_farmer.setPosition(
+				this.player_data.farmers.chicken.x,
+				this.player_data.farmers.chicken.y
+			);
+			this.chicken_farmer.canMove = false;
+			this.chicken_farmer.stamina = 0;
+			this.splash.play();
+
+
+			this.game.time.events.add(Phaser.Timer.SECOND * 2, function(ground) {
+				ground.loadTexture('water');
+				this.chicken_farmer.orientation = this.chicken_farmer.initial_orientation;
+				this.chicken_farmer.updateTexture();
+				this.chicken_farmer.stamina = 30;
+				this.chicken_farmer.visible = true;
+				this.chicken_farmer.canMove = true;
+			}, this, chfGround);
+
 		}
 
-		if(p2Ground.groundType == 'water') {
-			this.player2.setPosition(19, 8);
-			this.player2.stamina = 30;
+		if(cofGround.groundType == 'water') {
+			this.cow_farmer.visible = false;
+			cofGround.loadTexture('cow_farmer_drown');
+
+			this.cow_farmer.setPosition(
+				this.player_data.farmers.cow.x,
+				this.player_data.farmers.cow.y
+			);
+			this.cow_farmer.canMove = false;
+			this.cow_farmer.stamina = 0;
+			this.splash.play();
+
+
+			this.game.time.events.add(Phaser.Timer.SECOND * 2, function(ground) {
+				ground.loadTexture('water');
+				this.cow_farmer.orientation = this.cow_farmer.initial_orientation;
+				this.cow_farmer.updateTexture();
+				this.cow_farmer.stamina = 30;
+				this.cow_farmer.visible = true;
+				this.cow_farmer.canMove = true;
+			}, this, cofGround);
 		}
 
 		//What if players collide with the car
 		if(this.car !== null) {
-			//player 1
-			if(this.car.overlap(this.player1)) {
-				this.player1.setPosition(0, 6);
-				this.player1.stamina = 50;
+			//chicken farmer
+			//FIXME: Add ouch sound!
+			let intersect_chf = Phaser.Rectangle.intersection(this.car.getBounds(), this.chicken_farmer.getBounds());
+			let intersect_cof = Phaser.Rectangle.intersection(this.car.getBounds(), this.cow_farmer.getBounds());
+			if(intersect_chf.height >= 40) {
+				this.chicken_farmer.canMove = false;
+				this.chicken_farmer.stamina = 0;
+				this.chicken_farmer.loadTexture('chicken_farmer_runover');
+				this.game.time.events.add(Phaser.Timer.SECOND  * 2, function() {
+					this.chicken_farmer.setPosition(
+						this.player_data.farmers.chicken.x,
+						this.player_data.farmers.chicken.y
+						);
+					this.chicken_farmer.updateTexture();
+					this.chicken_farmer.stamina = 50;
+					this.chicken_farmer.canMove = true;
+				}, this);
 			}
-			if(this.car.overlap(this.player2)) {
-				this.player2.setPosition(19, 8);
-				this.player2.stamina = 50;
+
+			//cow farmer
+			if(intersect_cof.height >= 40) {
+				this.cow_farmer.canMove = false;
+				this.cow_farmer.stamina = 0;
+				this.cow_farmer.loadTexture('cow_farmer_runover');
+				this.game.time.events.add(Phaser.Timer.SECOND  * 2, function() {
+					this.cow_farmer.setPosition(
+						this.player_data.farmers.cow.x,
+						this.player_data.farmers.cow.y
+						);
+					this.cow_farmer.updateTexture();
+					this.cow_farmer.stamina = 50;
+					this.cow_farmer.canMove = true;
+				}, this);
+			}
+
+			if(this.fox) {
+				let intersect_fox = Phaser.Rectangle.intersection(this.fox.getBounds(), this.car.getBounds());
+				if(intersect_fox.height >= 40) {
+					this.fox.pauseMovementLoop();
+					this.fox.stopAllTimers();
+					this.fox.loadTexture('fox_dead');
+
+					this.game.time.events.add(Phaser.Timer.SECOND * 2, function (){
+							this.fox.visible = false;
+							this.fox.destroy();
+							this.fox = null;
+							this.foxTimer.resume();
+					});
+				}
+			}
+
+			if(this.activist) {
+				let intersect_activist = Phaser.Rectangle.intersection(this.activist.getBounds(), this.car.getBounds());
+				if(intersect_activist.height >= 40) {
+					this.activist.pauseMovementLoop();
+					this.activist.stopAllTimers();
+					this.activist.loadTexture('activist_dead');
+
+					this.game.time.events.add(Phaser.Timer.SECOND * 2, function (){
+							this.activist.visible = false;
+							this.activist.destroy();
+							this.activist = null;
+							this.activistTimer.resume();
+					});
+				}
 			}
 		}
+
+		if(this.fox) {
+
+			let fox_ground = this._getFloorAt(this.fox.grid_x, this.fox.grid_y);
+
+			if(this.fox.grid_x == this.chicken_farmer.grid_x &&
+				this.fox.grid_y == this.chicken_farmer.grid_y) {
+					if(this.fox.isSleeping) {
+						this.fox.pauseMovementLoop();
+						this.fox.stopAllTimers();
+						this.fox.loadTexture('fox_dead');
+						this.game.time.events.add(Phaser.Timer.SECOND * 2, function() {
+							this.fox.destroy();
+							this.fox = null;
+							this.foxTimer.resume();
+							this.chicken_farmer.stamina -= 10;
+							this.chicken_farmer.score += 100;
+						}, this);
+					} else if(!this.fox.isSleeping && this.chicken_farmer.canMove) {
+						this.chicken_farmer.canMove = false;
+						this.chicken_farmer.stamina = 0;
+						this.chicken_farmer.loadTexture('chicken_farmer_runover');
+						this.game.time.events.add(Phaser.Timer.SECOND  * 2, function() {
+							this.chicken_farmer.setPosition(
+								this.player_data.farmers.chicken.x,
+								this.player_data.farmers.chicken.y
+								);
+							this.chicken_farmer.updateTexture();
+							this.chicken_farmer.stamina = 50;
+							this.chicken_farmer.canMove = true;
+						}, this);
+					}
+			}
+
+			if(this.fox.grid_x == this.cow_farmer.grid_x &&
+				this.fox.grid_y == this.cow_farmer.grid_y) {
+					if(!this.fox.isSleeping) {
+						this.cow_farmer.canMove = false;
+						this.cow_farmer.stamina = 0;
+						this.cow_farmer.loadTexture('cow_farmer_runover');
+
+						this.game.time.events.add(Phaser.Timer.SECOND  * 2, function() {
+							this.cow_farmer.setPosition(
+								this.player_data.farmers.cow.x,
+								this.player_data.farmers.cow.y
+								);
+							this.cow_farmer.updateTexture();
+							this.cow_farmer.stamina = 50;
+							this.cow_farmer.canMove = true;
+							}, this);
+					}
+				}
+
+			if(fox_ground.groundType == 'water') {
+				this.fox.visible = false;
+				fox_ground.loadTexture('fox_drown');
+				this.fox.stopAllTimers();
+				this.splash.play();
+				this.fox.destroy();
+				this.fox = null;
+				this.game.time.events.add(Phaser.Timer.SECOND * 2, function(ground) {
+					this.foxTimer.resume();
+					ground.loadTexture('water');
+				}, this, fox_ground);
+			}
+		}
+
+		if(this.activist) {
+
+			let activist_ground = this._getFloorAt(this.activist.grid_x, this.activist.grid_y);
+
+			if(this.activist.grid_x == this.cow_farmer.grid_x &&
+				this.activist.grid_y == this.cow_farmer.grid_y) {
+					if(this.activist.isSleeping) {
+						this.actvist.pauseMovementLoop();
+						this.activist.stopAllTimers();
+						this.activist.loadTexture('activist_dead');
+						this.game.time.events.add(Phaser.Timer.SECOND * 2, function() {
+							this.activist.destroy();
+							this.activist = null;
+							this.activistTimer.resume();
+							this.cow_farmer.stamina -= 10;
+							this.cow_farmer.score += 100;
+						}, this);
+					} else if(!this.activist.isSleeping && this.cow_farmer.canMove) {
+						this.cow_farmer.canMove = false;
+						this.cow_farmer.stamina = 0;
+						this.cow_farmer.loadTexture('cow_farmer_runover');
+						this.game.time.events.add(Phaser.Timer.SECOND  * 2, function() {
+							this.cow_farmer.setPosition(
+								this.player_data.farmers.cow.x,
+								this.player_data.farmers.cow.y
+								);
+							this.cow_farmer.updateTexture();
+							this.cow_farmer.stamina = 50;
+							this.cow_farmer.canMove = true;
+						}, this);
+					}
+			}
+
+			if(this.activist.grid_x == this.chicken_farmer.grid_x &&
+				this.activist.grid_y == this.chicken_farmer.grid_y) {
+					if(!this.activist.isSleeping && this.chicken_farmer.canMove) {
+						this.chicken_farmer.canMove = false;
+						this.chicken_farmer.stamina = 0;
+						this.chicken_farmer.loadTexture('chicken_farmer_runover');
+
+						this.game.time.events.add(Phaser.Timer.SECOND  * 2, function() {
+							this.chicken_farmer.setPosition(
+								this.player_data.farmers.chicken.x,
+								this.player_data.farmers.chicken.y
+								);
+							this.chicken_farmer.updateTexture();
+							this.chicken_farmer.stamina = 50;
+							this.chicken_farmer.canMove = true;
+							}, this);
+					}
+				}
+
+			if(activist_ground.groundType == 'water') {
+				this.activist.visible = false;
+				activist_ground.loadTexture('activist_drown');
+				this.activist.stopAllTimers();
+				this.splash.play();
+				this.activist.destroy();
+				this.activist = null;
+				this.game.time.events.add(Phaser.Timer.SECOND * 2, function(ground) {
+					this.activistTimer.resume();
+					ground.loadTexture('water');
+				}, this, activist_ground);
+			}
+		}
+
+		if(this.fox && this.activist) {
+			if(this.activist.grid_x == this.fox.grid_x &&
+				this.activist.grid_y == this.fox.grid_y) {
+					if(!this.fox.isSleeping && this.activist.canMove) {
+						this.activist.pauseMovementLoop();
+						this.activist.stopAllTimers();
+						this.activist.loadTexture('activist_dead');
+
+						this.game.time.events.add(Phaser.Timer.SECOND  * 2, function() {
+							this.activist.destroy();
+							this.activist = null;
+							this.activistTimer.resume();
+							}, this);
+					}
+				}
+		}
+
 	}
 
 	buildMap() {
@@ -235,11 +570,11 @@ class GameState extends Phaser.State {
 			}
 		}
 
-		var roadPoints = [3,7,11].filter(function(el) {
+		var roadPoints = [3,11,7].filter(function(el) {
 			return (this.game.rnd.between(0,4) > 2);
 		}, this);
 
-		if(roadPoints.length == 0) {
+		if(roadPoints.length <= 1) {
 			roadPoints = [7];
 		}
 
@@ -251,9 +586,13 @@ class GameState extends Phaser.State {
 			}
 		}, this);
 
-		var waterSeeds = [4,9,10,15].filter(function(el) {
+		var waterSeeds = [4,9,10,14].filter(function(el) {
 			return (this.game.rnd.between(0,4) > 2);
 		}, this);
+
+		if(waterSeeds.length == 0) {
+			waterSeeds = [4, 14];
+		}
 
 		var waterPoints = [];
 
@@ -345,9 +684,44 @@ class GameState extends Phaser.State {
 		}, this);
 	}
 
+
 	endGame() {
+		let player1 = {
+			ownedTerrain: this.player1.ownedTerrain,
+			type: this.player1.playerType,
+		}
+		let player2 = {
+			ownedTerrain: this.player2.ownedTerrain,
+			type: this.player2.playerType,
+		}
+
 		this.playTime.stop();
-		this.game.paused = true;
+		this.music.stop();
+		//this.game.input.keyboard.clearCaptures();
+		//this.game.input.keyboard.destroy();
+		this.gameEnded = true;
+		this.player1.stamina = 0;
+		this.player2.stamina = 0;
+		this.player1.canMove = false;
+		this.player2.canMove = false;
+
+		this.foxTimer.stop();
+		this.activistTimer.stop();
+
+		if(this.activist)
+			this.activist.stopAllTimers();
+		if(this.fox)
+			this.fox.stopAllTimers();
+
+		this.ground.children.forEach(function(el) {
+			el.stopGrowTimer();
+		});
+
+		this.game.time.events.add(Phaser.Timer.SECOND * 3, function() {
+			this.game.state.start('AfterGame', true, false, player1, player2);
+		}, this);
+
+		/*
 		var winner = null;
 		console.log(this.player1.ownedTerrain, this.player2.ownedTerrain);
 		if(this.player1.ownedTerrain > this.player2.ownedTerrain) {
@@ -361,9 +735,9 @@ class GameState extends Phaser.State {
 
 		this.esc.onUp.add(function() {
 			this.game.paused = false;
-			this.game.state.restart();
+			this.game.state.restart(true);
 		}, this);
-
+		*/
 
 	}
 
@@ -372,6 +746,7 @@ class GameState extends Phaser.State {
 
 		//ground types
 		this.game.load.image('water', 'sprites/new/water.png');
+		this.game.load.image('water_drown', 'sprites/new/water_drown.png');
 		this.game.load.image('dead', 'sprites/new/dead.png');
 
 		this.game.load.image('pavement', 'sprites/new/pavement.png');
@@ -395,6 +770,8 @@ class GameState extends Phaser.State {
 		this.game.load.image('cow_farmer_left', 'def_sprites/game/cow_farmer_standing_left.png');
 		this.game.load.image('cow_farmer_right', 'def_sprites/game/cow_farmer_standing_right.png');
 		this.game.load.image('cow_farmer_up', 'def_sprites/game/cow_farmer_standing_up.png');
+		this.game.load.image('cow_farmer_drown', 'def_sprites/game/cow_farmer_drown.png');
+		this.game.load.image('cow_farmer_runover', 'def_sprites/game/cow_farmer_runover.png');
 
 		//chicken farmer
 		this.game.load.image('chicken_farmer_sitting', 'def_sprites/game/chicken_farmer_sitting_down.png');
@@ -402,10 +779,40 @@ class GameState extends Phaser.State {
 		this.game.load.image('chicken_farmer_left', 'def_sprites/game/chicken_farmer_standing_left.png');
 		this.game.load.image('chicken_farmer_right', 'def_sprites/game/chicken_farmer_standing_right.png');
 		this.game.load.image('chicken_farmer_up', 'def_sprites/game/chicken_farmer_standing_up.png');
+		this.game.load.image('chicken_farmer_drown', 'def_sprites/game/chicken_farmer_drown.png');
+		this.game.load.image('chicken_farmer_runover', 'def_sprites/game/chicken_farmer_runover.png');
+
+		this.game.load.image('fox_left', 'def_sprites/game/fox_left.png');
+		this.game.load.image('fox_right', 'def_sprites/game/fox_right.png');
+		this.game.load.image('fox_down', 'def_sprites/game/fox_down.png');
+		this.game.load.image('fox_up', 'def_sprites/game/fox_up.png');
+		this.game.load.image('fox_dead', 'def_sprites/game/fox_dead.png');
+		this.game.load.image('fox_sleep', 'def_sprites/game/fox_sleep.png');
+		this.game.load.image('fox_drown', 'def_sprites/game/fox_drown.png');
+
+		this.game.load.image('activist_left', 'def_sprites/game/hippie-left.png');
+		this.game.load.image('activist_right', 'def_sprites/game/hippie-right.png');
+		this.game.load.image('activist_down', 'def_sprites/game/hippie-down.png');
+		this.game.load.image('activist_up', 'def_sprites/game/hippie-up.png');
+		this.game.load.image('activist_dead', 'def_sprites/game/hippie-dead.png');
+		this.game.load.image('activist_sleep', 'def_sprites/game/hippie-sleep.png');
+		this.game.load.image('activist_drown', 'def_sprites/game/hippie-drown.png');
 
 		//car
 		this.game.load.image('car_left', 'def_sprites/game/car_left.png');
 		this.game.load.image('car_right', 'def_sprites/game/car_right.png');
+
+		//game pause
+		this.game.load.image('pause_menu', 'def_sprites/game/game_paused.png');
+		this.game.load.spritesheet('back-button',
+		'def_sprites/game/back-button.png',
+		164, 75);
+		this.game.load.spritesheet('menu-button',
+		'def_sprites/game/menu-button.png',
+		164, 75);
+		this.game.load.spritesheet('restart-button',
+		'def_sprites/game/restart-button.png',
+		164, 75);
 
 		//sound
 		this.game.load.audio('cow_sp', 'sounds/cow_spawn.mp3');
@@ -413,6 +820,9 @@ class GameState extends Phaser.State {
 		this.game.load.audio('shovel_1', 'sounds/shovel_1.mp3');
 		this.game.load.audio('shovel_2', 'sounds/shovel_2.mp3');
 		this.game.load.audio('car', 'sounds/car.mp3');
+		this.game.load.audio('splash', 'sounds/large_splash.mp3');
+
+		this.game.load.audio('music', 'sounds/game_music.mp3');
 	}
 
 }

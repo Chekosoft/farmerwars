@@ -10,12 +10,17 @@ export default class Floor extends Phaser.Sprite {
     constructor(game, x, y, type) {
         super(game, x*config.floorwidth, y*config.floorheight, type);
         this.groundType = type;
+        this.initialGroundType = type;
         this.grid_x = x;
         this.grid_y = y;
         this.animals = 0;
         this.growTimer = null;
         this.owner = null;
         this.soilRadius = 0;
+        this.hasFox = false;
+        this.hasActivist = false;
+        this.fox = null;
+        this.activist = null;
 
         // this.ne = this.game.add.sprite(config.floorwidth*x, config.floorheight*y, 'transparent_small');
         // this.nw = this.game.add.sprite(config.floorwidth*(x+20), config.floorheight*y, 'transparent_small');
@@ -43,6 +48,7 @@ export default class Floor extends Phaser.Sprite {
         this.groundType = new_type;
         this.loadTexture(new_type);
         this.animals = 0;
+        this.stopGrowTimer();
     }
 
     changeOwner(owner) {
@@ -76,15 +82,48 @@ export default class Floor extends Phaser.Sprite {
     }
 
     stopGrowTimer() {
-        if(this.growTimer.running) {
+        if(this.growTimer && this.growTimer.running) {
             this.growTimer.stop(true);
         }
+    }
+
+    setFox(foxInstance) {
+      this.fox = foxInstance;
+    }
+
+    setActivist(activistInstance) {
+      this.activist = activistInstance;
     }
 
     _growAnimals() {
         this.animals++;
         var state = this.game.state.getCurrentState();
-        if(this.animals <= 3) {
+        if(this.hasFox) {
+         this.fox.eatenAnimals += this.animals;
+         this.animals = 0;
+         this.changeOwner(null);
+         this.changeType('soil');
+         this.fox.isFoxSleepy();
+         this.stopGrowTimer();
+         this.setFox(null);
+         this.hasFox = false;
+         let positionAt = state.chicken_lands.indexOf(this);
+         if(positionAt >= 0)
+             state.chicken_lands.splice(positionAt, 1);
+       } else if(this.hasActivist) {
+         this.activist.eatenAnimals += this.animals;
+         this.animals = 0;
+         this.changeOwner(null);
+         this.changeType('soil');
+         this.activist.isActivistSleepy();
+         this.stopGrowTimer();
+         this.setActivist(null);
+         this.hasActivist = false;
+         let positionAt = state.cow_lands.indexOf(this);
+         if(positionAt >= 0)
+             state.cow_lands.splice(positionAt, 1);
+       }
+       else if(this.animals <= 3) {
             if(this.owner.playerType == 'cow_farmer') {
                 this.loadTexture('cow_' + this.animals);
                 if(!state.cow_sound.isPlaying && this.game.rnd.between(0,2) == 2)
@@ -99,6 +138,18 @@ export default class Floor extends Phaser.Sprite {
         else {
             this.animals = 0;
             this.changeType('dead');
+
+            if(this.owner.playerType == 'chicken_farmer'){
+                let positionAt = state.chicken_lands.indexOf(this);
+                if(positionAt >= 0)
+                    state.chicken_lands.splice(positionAt, 1);
+           }
+            else if(this.owner.playerType == 'cow_farmer'){
+                let positionAt = state.cow_lands.indexOf(this);
+                if(positionAt >= 0)
+                    state.cow_lands.splice(positionAt, 1);
+            }
+
             this.changeOwner(null);
             this.stopGrowTimer();
         }
